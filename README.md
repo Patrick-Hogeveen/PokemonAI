@@ -9,5 +9,5 @@ run python scripts at your leisure
 -Random and MaxDamage scripts written from poke env examples
 -playerml is a combination of examples and pytorch dqn algorithm
 
-#TODO:
+# TODO:
 -playerml needs better logging of stats ie. amount of dmg taken, number of super effective moves used, etc. Just items to see how well the AI is doing
