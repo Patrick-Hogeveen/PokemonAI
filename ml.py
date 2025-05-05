@@ -65,7 +65,7 @@ class Agent():
         self.LR = 1e-4
 
         # Get number of actions from gym action space
-        self.n_actions = env.action_space.n
+        self.n_actions = env.action_spaces['SimpleRLPlayer 1'].n
         # Get the number of state observations
         
         self.state = env.reset()

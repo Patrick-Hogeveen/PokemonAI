@@ -1,8 +1,9 @@
 import asyncio
 
 import numpy as np
-from gym.spaces import Box, Space
-from gym.utils.env_checker import check_env
+import numpy.typing as npt
+from gymnasium.spaces import Box, Space
+from gymnasium.utils.env_checker import check_env
 
 import time
 
@@ -18,26 +19,31 @@ from poke_env import gen_data
 from poke_env.environment.abstract_battle import AbstractBattle
 from poke_env.player.player import Player
 from poke_env.player.battle_order import BattleOrder
+
 from poke_env.player import (
-    Gen8EnvSinglePlayer,
-    Gen4EnvSinglePlayer,
+    SinglesEnv,
+    SingleAgentWrapper,
     MaxBasePowerPlayer,
-    ObservationType,
     RandomPlayer,
     SimpleHeuristicsPlayer,
     background_cross_evaluate,
     background_evaluate_player,
-    wrap_for_old_gym_api,
 )
 
 
-class SimpleRLPlayer(Gen4EnvSinglePlayer):
+class SimpleRLPlayer(SinglesEnv):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.observation_spaces = {
+            agent: Box(np.array([0]), np.array([1]), dtype=np.int64)
+            for agent in self.possible_agents
+        }
     def calc_reward(self, last_battle, current_battle) -> float:
         return self.reward_computing_helper(
             current_battle, fainted_value=2.0, hp_value=1.0, victory_value=30.0
         )
 
-    def embed_battle(self, battle: AbstractBattle) -> ObservationType:
+    def embed_battle(self, battle: AbstractBattle):
         # -1 indicates that the move does not have a base power
         # or is not available
         moves_base_power = -np.ones(4)
@@ -82,6 +88,20 @@ class SimpleRLPlayer(Gen4EnvSinglePlayer):
             dtype=np.float32,
         )
     
+class SinglesTestEnv(SinglesEnv):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.observation_spaces = {
+            agent: Box(np.array([0]), np.array([1]), dtype=np.int64)
+            for agent in self.possible_agents
+        }
+
+    def calc_reward(self, battle) -> float:
+        return 0.0
+
+    def embed_battle(self, battle):
+        return np.array([0])
+    
     
 class PokeAgent(nn.Module):
     def __init__(self, vocab_size, num_choices):
@@ -104,25 +124,29 @@ class PokeAgent(nn.Module):
     
 async def main():
     opponent = RandomPlayer(battle_format="gen4randombattle")
-    test_env = SimpleRLPlayer(
-        battle_format="gen4randombattle", start_challenging=True, opponent=opponent
-    )
+    test_player = SinglesTestEnv(
+            battle_format=f"gen4randombattle",
+            log_level=25,
+            start_challenging=True,
+            strict=False,
+        )
+    test_env = SingleAgentWrapper(test_player, RandomPlayer())
     check_env(test_env)
     test_env.close()
 
     opponent = RandomPlayer(battle_format="gen4randombattle")
     train_player = SimpleRLPlayer(
-        battle_format="gen4randombattle", opponent=opponent, start_challenging=True
+        battle_format="gen4randombattle", start_challenging=True
     )
-    train_env = wrap_for_old_gym_api(train_player)
+    train_env = train_player
     opponent = MaxDamagePlayer(battle_format="gen4randombattle")
     eval_env = SimpleRLPlayer(
-        battle_format="gen4randombattle", opponent=opponent, start_challenging=True
+        battle_format="gen4randombattle", start_challenging=True
     )
-    eval_env = wrap_for_old_gym_api(eval_env)
+    eval_env = eval_env
 
-    n_action = train_env.action_space.n
-    input_shape = (1,) + train_env.observation_space.shape
+    n_action = train_env.action_space
+    input_shape = (1,) + train_env.observation_spaces['SimpleRLPlayer 1'].shape
 
     dqn = Agent(train_env)
     start = time.time()
@@ -150,5 +174,12 @@ async def main():
 
     print("here")
 
+
+    player1 = RandomPlayer()
+    player2 = RandomPlayer()
+
+    await player1.battle_against(player2, n_battles=1)
+
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(main())
+    #main()
