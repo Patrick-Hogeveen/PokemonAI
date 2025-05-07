@@ -68,7 +68,7 @@ class Agent():
         self.n_actions = env.action_spaces['SimpleRLPlayer 1'].n
         # Get the number of state observations
         
-        self.state = env.reset()
+        self.state = env.reset()[0]['SimpleRLPlayer 1']
         self.n_observations = len(self.state)
 
         self.policy_net = DQN(self.n_observations, self.n_actions).to(device)
@@ -95,7 +95,7 @@ class Agent():
                 # found, so we pick action with the larger expected reward.
                 return self.policy_net(state).max(1)[1].view(1, 1)
         else:
-            return torch.tensor([[self.env.action_space.sample()]], device=device, dtype=torch.long)
+            return torch.tensor([[self.env.action_spaces['SimpleRLPlayer 1'].sample()]], device=device, dtype=torch.long)
         
     
     def plot_durations(self, show_result=False):
@@ -178,7 +178,7 @@ class Agent():
 
         for i_episode in range(num_episodes):
             # Initialize the environment and get it's state
-            state = self.env.reset()
+            state = self.env.reset()[0]['SimpleRLPlayer 1']
             state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
             for t in count():
                 action = self.select_action(state)
