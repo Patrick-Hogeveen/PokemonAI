@@ -34,16 +34,25 @@ from poke_env.player import (
 class SimpleRLPlayer(SinglesEnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        low = [-1, -1, -1, -1, 0, 0, 0, 0, 0, 0]
+        high = [3, 3, 3, 3, 4, 4, 4, 4, 1, 1]
         self.observation_spaces = {
-            agent: Box(np.array([0]), np.array([1]), dtype=np.int64)
+            agent: Box(
+                np.array(low, dtype=np.float32),
+                np.array(high, dtype=np.float32),
+                dtype=np.float32,
+            )
             for agent in self.possible_agents
         }
-    def calc_reward(self, last_battle, current_battle) -> float:
+    def calc_reward(self, current_battle) -> float:
+        #not deterministic?
+       
         return self.reward_computing_helper(
             current_battle, fainted_value=2.0, hp_value=1.0, victory_value=30.0
         )
-
-    def embed_battle(self, battle: AbstractBattle):
+    
+    #This is causing the non-deterministic error
+    def embed_battle(self, battle: AbstractBattle)  -> np.ndarray[np.float32]:
         # -1 indicates that the move does not have a base power
         # or is not available
         moves_base_power = -np.ones(4)
@@ -77,22 +86,54 @@ class SimpleRLPlayer(SinglesEnv):
                 [fainted_mon_team, fainted_mon_opponent],
             ]
         )
-        return np.float32(final_vector)
-
-    def describe_embedding(self) -> Space:
         low = [-1, -1, -1, -1, 0, 0, 0, 0, 0, 0]
         high = [3, 3, 3, 3, 4, 4, 4, 4, 1, 1]
-        return Box(
-            np.array(low, dtype=np.float32),
-            np.array(high, dtype=np.float32),
-            dtype=np.float32,
-        )
+        return np.float32(low)
+        #return np.float32(final_vector)
+
+    #def describe_embedding(self) -> Space:
+    #    low = [-1, -1, -1, -1, 0, 0, 0, 0, 0, 0]
+    #    high = [3, 3, 3, 3, 4, 4, 4, 4, 1, 1]
+    #    return Box(
+    #        np.array(low, dtype=np.float32),
+    #        np.array(high, dtype=np.float32),
+    #        dtype=np.float32,
+    #    )
     
-class SinglesTestEnv(SinglesEnv):
+class SinglesTestEnv(SinglesEnv[npt.NDArray[np.float32]]):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.observation_spaces = {
-            agent: Box(np.array([0]), np.array([1]), dtype=np.int64)
+            agent: Box(np.array([0, 0]), np.array([6, 6]), dtype=np.float32)
+            for agent in self.possible_agents
+        }
+        self.strict = False
+
+    def calc_reward(self, battle) -> float:
+        return 0.0#self.reward_computing_helper(battle)
+
+    def embed_battle(self, battle: AbstractBattle):
+        to_embed = []
+        fainted_mons = 0
+        for mon in battle.team.values():
+            if mon.fainted:
+                fainted_mons += 1
+        to_embed.append(fainted_mons)
+        fainted_enemy_mons = 0
+        for mon in battle.opponent_team.values():
+            if mon.fainted:
+                fainted_enemy_mons += 1
+        to_embed.append(fainted_enemy_mons)
+
+        #print(self.observation_space)
+        #print(self.reset())
+        return np.array([0,0], dtype=np.float32)#np.array(to_embed)
+    
+class SinglesTestEnv2(SinglesEnv):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.observation_spaces = {
+            agent: Box(np.array([0, 0]), np.array([6, 6]), dtype=np.float32)
             for agent in self.possible_agents
         }
 
@@ -100,7 +141,7 @@ class SinglesTestEnv(SinglesEnv):
         return 0.0
 
     def embed_battle(self, battle):
-        return np.array([0])
+        return np.array([0,0], dtype=np.float32)
     
     
 class PokeAgent(nn.Module):
@@ -123,14 +164,21 @@ class PokeAgent(nn.Module):
         return x
     
 async def main():
-    opponent = RandomPlayer(battle_format="gen4randombattle")
-    test_player = SinglesTestEnv(
-            battle_format=f"gen4randombattle",
+    opponent = RandomPlayer(battle_format="gen8randombattle")
+    test_player = SimpleRLPlayer(
+        battle_format="gen4randombattle", start_challenging=True, strict=False
+    )
+    test_player2 = SinglesTestEnv(
+            battle_format=f"gen8randombattle",
             log_level=25,
             start_challenging=True,
             strict=False,
         )
-    test_env = SingleAgentWrapper(test_player, RandomPlayer())
+    test_env = SingleAgentWrapper(test_player, MaxDamagePlayer())
+   
+    
+    #test_out = test_env.reset()
+    
     check_env(test_env)
     test_env.close()
 
